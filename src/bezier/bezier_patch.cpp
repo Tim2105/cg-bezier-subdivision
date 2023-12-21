@@ -121,6 +121,33 @@ void Bezier_patch::bounding_box(vec3 &_bbmin, vec3 &_bbmax) const
 
 //------------------------------------------------------------------------------
 
+uint64_t nCr(int n, int k) {
+    uint64_t res = 1;
+
+    // Weil nCr(n, k) = nCr(n, n-k)
+    if(k > n - k)
+        k = n - k;
+
+    // [n * (n-1) *---* (n-k+1)] / [k * (k-1) *----* 1]
+    for(int i = 0; i < k; ++i) {
+        res *= (n - i);
+        res /= (i + 1);
+    }
+
+    return res;
+}
+
+float bernstein(float t, int n, int i) {
+    if(i > n)
+        return 0;
+
+    return nCr(n, i) * std::pow(t, i) * std::pow(1.0 - t, n - i);
+}
+
+vec3 lerp(const vec3 &a, const vec3 &b, float t) {
+    return a * (1.0 - t) + b * t;
+}
+
 void Bezier_patch::position_normal(float _u, float _v, vec3 &_p, vec3 &_n) const
 {
     /** \todo Evaluate the Bezier patch at parameter (`_u`,`_v`) in order to
@@ -139,6 +166,22 @@ void Bezier_patch::position_normal(float _u, float _v, vec3 &_p, vec3 &_n) const
     vec3 dv(0.0);
     vec3 n(0.0);
 
+    if(use_de_Casteljau_) {
+        
+    } else {
+        for(int i = 0; i < 4; ++i) {
+            for(int j = 0; j < 4; ++j) {
+                p += control_points_[i][j] * bernstein(_u, 3, i) * bernstein(_v, 3, j);
+                du += control_points_[i][j] * bernstein(_u, 2, i) * bernstein(_v, 3, j);
+                dv += control_points_[i][j] * bernstein(_u, 3, i) * bernstein(_v, 2, j);
+            }
+        }
+
+        du *= 4;
+        dv *= 4;
+
+        n = normalize(cross(du, dv));
+    }
 
     // copy resulting position and normal to output variables
     _p = p;
