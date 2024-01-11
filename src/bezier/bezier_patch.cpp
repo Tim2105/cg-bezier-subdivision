@@ -148,6 +148,10 @@ vec3 lerp(const vec3 &a, const vec3 &b, float t) {
     return a * (1.0 - t) + b * t;
 }
 
+vec3 bilerp(const vec3 &a, const vec3 &b, const vec3 &c, const vec3 &d, float u, float v) {
+    return lerp(lerp(a, b, u), lerp(c, d, u), v);
+}
+
 void Bezier_patch::position_normal(float _u, float _v, vec3 &_p, vec3 &_n) const
 {
     /** \todo Evaluate the Bezier patch at parameter (`_u`,`_v`) in order to
@@ -168,6 +172,29 @@ void Bezier_patch::position_normal(float _u, float _v, vec3 &_p, vec3 &_n) const
 
     if(use_de_Casteljau_) {
         
+        vec3 firstLayer[3][3];
+
+        for(int i = 0; i < 3; i++) {
+            for(int j = 0; j < 3; j++) {
+                firstLayer[i][j] = bilerp(control_points_[i][j], control_points_[i][j + 1],
+                                          control_points_[i + 1][j], control_points_[i + 1][j + 1], _u, _v);
+            }
+        }
+
+        vec3 secondLayer[2][2];
+
+        for(int i = 0; i < 2; i++) {
+            for(int j = 0; j < 2; j++) {
+                secondLayer[i][j] = bilerp(firstLayer[i][j], firstLayer[i][j + 1],
+                                           firstLayer[i + 1][j], firstLayer[i + 1][j + 1], _u, _v);
+            }
+        }
+
+        p = bilerp(secondLayer[0][0], secondLayer[0][1],
+                             secondLayer[1][0], secondLayer[1][1], _u, _v);
+
+        n = normalize(cross(secondLayer[0][1] - secondLayer[0][0], secondLayer[1][1] - secondLayer[1][0]));
+
     } else {
         for(int i = 0; i < 4; ++i) {
             for(int j = 0; j < 4; ++j) {
