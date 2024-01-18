@@ -193,19 +193,23 @@ void Bezier_patch::position_normal(float _u, float _v, vec3 &_p, vec3 &_n) const
         p = bilerp(secondLayer[0][0], secondLayer[0][1],
                              secondLayer[1][0], secondLayer[1][1], _u, _v);
 
-        n = normalize(cross(secondLayer[0][1] - secondLayer[0][0], secondLayer[1][1] - secondLayer[1][0]));
+        n = normalize(cross(secondLayer[0][1] - secondLayer[0][0], secondLayer[0][1] - secondLayer[1][0]));
 
     } else {
         for(int i = 0; i < 4; ++i) {
             for(int j = 0; j < 4; ++j) {
                 p += control_points_[i][j] * bernstein(_u, 3, i) * bernstein(_v, 3, j);
-                du += control_points_[i][j] * bernstein(_u, 2, i) * bernstein(_v, 3, j);
-                dv += control_points_[i][j] * bernstein(_u, 3, i) * bernstein(_v, 2, j);
+
+                if(i < 3)
+                    du += (control_points_[i + 1][j] - control_points_[i][j]) * bernstein(_u, 2, i) * bernstein(_v, 3, j);
+
+                if(j < 3)
+                    dv += (control_points_[i][j + 1] - control_points_[i][j]) * bernstein(_u, 3, i) * bernstein(_v, 2, j);
             }
         }
 
-        du *= 4;
-        dv *= 4;
+        du *= 3;
+        dv *= 3;
 
         n = normalize(cross(du, dv));
     }
@@ -216,6 +220,11 @@ void Bezier_patch::position_normal(float _u, float _v, vec3 &_p, vec3 &_n) const
 }
 
 //-----------------------------------------------------------------------------
+
+void sample(unsigned int n, double* result) {
+    for(unsigned int i = 0; i < n; i++)
+        result[i] = 1.0 / (n - 1) * i;
+}
 
 void Bezier_patch::tessellate(unsigned int _resolution)
 {
@@ -254,24 +263,40 @@ void Bezier_patch::tessellate(unsigned int _resolution)
      *   to OpenGL in `upload_opengl_buffers()` at the end of this function.
      */
 
+    double* gridSamples = new double[N];
+    vec3* positions = new vec3[N * N];
+    vec3* normals = new vec3[N * N];
 
-    // DELETE ME BEGIN
+    sample(N, gridSamples);
 
-    // This code is just to see something after finishing the first task
-    // it samples the bezier patch at 4 uv-positions (0,25,0.25),(0.25,0.75),(0.75,0.25) and (0.75,0.75)
-    for (unsigned int i = 0; i < 2; ++i)
-    {
-        for (unsigned int j = 0; j < 2; ++j)
-        {
-            float u = i == 0 ? 0.25 : 0.75;
-            float v = j == 0 ? 0.25 : 0.75;
-            vec3 p, n;
-            position_normal(u, v, p, n);
-            surface_vertices_.push_back(p);
-            surface_normals_.push_back(n);
+    for(unsigned int x = 0; x < N; x++) {
+        double u = gridSamples[x];
+        for(unsigned int y = 0; y < N; y++) {
+            double v = gridSamples[y];
+            position_normal(u, v, positions[x * N + y], normals[x * N + y]);
         }
     }
-    // DELETE ME END
+
+    for(unsigned int i = 0; i < N * N; i++) {
+        surface_vertices_.push_back(positions[i]);
+        surface_normals_.push_back(normals[i]);
+    }
+
+    for(unsigned int x = 0; x < N - 1; x++) {
+        for(unsigned int y = 0; y < N - 1; y++) {
+            surface_triangles_.push_back(x * N + y);
+            surface_triangles_.push_back(x * N + y + 1);
+            surface_triangles_.push_back((x + 1) * N + y + 1);
+
+            surface_triangles_.push_back(x * N + y);
+            surface_triangles_.push_back((x + 1) * N + y + 1);
+            surface_triangles_.push_back((x + 1) * N + y);
+        }
+    }
+
+    delete gridSamples;
+    delete positions;
+    delete normals;
 
 
     // test the results to avoid ulgy memory leaks
