@@ -154,17 +154,6 @@ vec3 bilerp(const vec3 &a, const vec3 &b, const vec3 &c, const vec3 &d, float u,
 
 void Bezier_patch::position_normal(float _u, float _v, vec3 &_p, vec3 &_n) const
 {
-    /** \todo Evaluate the Bezier patch at parameter (`_u`,`_v`) in order to
-     *   compute a position (to be stored in `_p`) and a normal vector (to
-     *   be stored in `_n`).
-     *
-     *   Note that the normal vector is the cross product of the u- and
-     * v-tangent. Use either the analytic defition of the Bezier patch, i.e.,
-     * the cubic Bernstein polynomials \f$ B_i^3 \f$, or the bilinear de
-     * Casteljau algorithm dependent on the boolean `use_de_Casteljau`. Compare
-     * their performance by using the GUI.
-     */
-
     vec3 p(0.0);
     vec3 du(0.0);
     vec3 dv(0.0);
@@ -193,11 +182,14 @@ void Bezier_patch::position_normal(float _u, float _v, vec3 &_p, vec3 &_n) const
         p = bilerp(secondLayer[0][0], secondLayer[0][1],
                              secondLayer[1][0], secondLayer[1][1], _u, _v);
 
-        n = normalize(cross(secondLayer[0][1] - secondLayer[0][0], secondLayer[0][1] - secondLayer[1][0]));
+        du = lerp(secondLayer[0][0] - secondLayer[0][1], secondLayer[1][0] - secondLayer[1][1], _v);
+        dv = lerp(secondLayer[0][0] - secondLayer[1][0], secondLayer[0][1] - secondLayer[1][1], _u);
+
+        n = normalize(cross(du, dv));
 
     } else {
-        for(int i = 0; i < 4; ++i) {
-            for(int j = 0; j < 4; ++j) {
+        for(int i = 0; i < 4; i++) {
+            for(int j = 0; j < 4; j++) {
                 p += control_points_[i][j] * bernstein(_u, 3, i) * bernstein(_v, 3, j);
 
                 if(i < 3)
@@ -208,8 +200,8 @@ void Bezier_patch::position_normal(float _u, float _v, vec3 &_p, vec3 &_n) const
             }
         }
 
-        du *= 3;
-        dv *= 3;
+        du *= 3.0;
+        dv *= 3.0;
 
         n = normalize(cross(du, dv));
     }
@@ -221,7 +213,7 @@ void Bezier_patch::position_normal(float _u, float _v, vec3 &_p, vec3 &_n) const
 
 //-----------------------------------------------------------------------------
 
-void sample(unsigned int n, double* result) {
+void sample(unsigned int n, float* result) {
     for(unsigned int i = 0; i < n; i++)
         result[i] = 1.0 / (n - 1) * i;
 }
@@ -234,45 +226,17 @@ void Bezier_patch::tessellate(unsigned int _resolution)
 
     // just to get slightly cleaner code below...
     const unsigned int N = _resolution;
-    /** \todo Tessellate the Bezier patch into a set of triangles.
-     *   This requires the following steps (with `N` being `_resolution`):
-     *   - Evaluate the Bezier patch at a regular `N`x`N` grid of
-     *   parameter values (`u`, `v`) within the unit square [0,1]x[0,1].
-     *   So for example `N == 2` would sample `u` and `v` at 0.0 and 1.0
-     *   and `N == 3` at 0.0, 0.5 and 1.0 and so on.
-     *   For every parameter (`u`,`v`) compute the position and normal
-     *   of the Bezier patch using the function `position_normal(u,v,p,n)`.
-     *   Store the resulting `N`x`N` grids of points and normals in a
-     *   linearized manner in the arrays `surface_vertices_[]` and
-     *   `surface_normals_[]`, which in the end should have `N`*`N` elements.
-     *   - Connect these surface samples by triangles. Each quad in your
-     *   regular grid can simply be split into
-     *   two triangles. Hence, since we have `(N-1)*(N-1)` quads, which we
-     *   split into `2*(N-1)*(N-1)` triangles, and every triangle needs
-     *   3 indices, you should in the end have `6*(N-1)*(N-1)` entries
-     *   in the index array `surface_triangles_`.
-     *
-     *   Hints:
-     *   - After filling positions and normals, you should already see the
-     *   mesh's points in drawmode "Points".
-     *   - To get the tesselation right, it helps to draw a rectangular NxN grid
-     *   with a small N on a sheet of paper to visualize which points should be
-     *   connected to triangles.
-     *
-     *   The arrays that you produce (points, normals, indices) will be uploaded
-     *   to OpenGL in `upload_opengl_buffers()` at the end of this function.
-     */
 
-    double* gridSamples = new double[N];
+    float* gridSamples = new float[N];
     vec3* positions = new vec3[N * N];
     vec3* normals = new vec3[N * N];
 
     sample(N, gridSamples);
 
     for(unsigned int x = 0; x < N; x++) {
-        double u = gridSamples[x];
+        float v = gridSamples[x];
         for(unsigned int y = 0; y < N; y++) {
-            double v = gridSamples[y];
+            float u = gridSamples[y];
             position_normal(u, v, positions[x * N + y], normals[x * N + y]);
         }
     }
